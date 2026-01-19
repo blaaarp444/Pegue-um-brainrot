@@ -37,7 +37,7 @@ button.MouseButton1Click:Connect(function()
 end)
 
 -- ================= CONFIG =================
-local TELEPORT_DISTANCE = 3
+local TELEPORT_DISTANCE = 11
 local WAIT_BEFORE_THROW = 5
 -- ==========================================
 
