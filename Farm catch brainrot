@@ -1,0 +1,169 @@
+-- ================= GUI FLUTUANTE =================
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+_G.H = false -- começa desligado
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "FloatingToggleGUI"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.fromScale(0.18, 0.08)
+button.Position = UDim2.fromScale(0.7, 0.5)
+button.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+button.TextColor3 = Color3.new(1,1,1)
+button.TextScaled = true
+button.Text = "OFF"
+button.Font = Enum.Font.GothamBold
+button.Parent = gui
+button.Active = true
+button.Draggable = true -- mobile + pc
+
+-- Cantos arredondados
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 20)
+corner.Parent = button
+
+-- Toggle
+button.MouseButton1Click:Connect(function()
+    _G.H = not _G.H
+
+    if _G.H then
+        button.Text = "ON"
+        button.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        button.Text = "OFF"
+        button.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+-- ================= CONFIG =================
+local TELEPORT_DISTANCE = 11
+local WAIT_BEFORE_THROW = 5
+-- ==========================================
+
+-- Cubes normais
+local normalCubes = {
+    ["Cube.009"] = true,
+    ["Cube.136"] = true,
+    ["Cube.082"] = true,
+    ["Cube.047"] = true,
+    ["Cube.041"] = true,
+    ["Cube.079"] = true
+}
+
+-- Cubes DIAMOND
+local diamondOnlyCubes = {
+    ["Cube.071"] = true,
+    ["Cube.015"] = true,
+    ["Cube.106"] = true,
+    ["Cube.121"] = true
+}
+
+-- Serviços
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local camera = workspace.CurrentCamera
+
+-- Remotes
+local AttackRemote = ReplicatedStorage.Remotes.Events.Attack
+local EquipCube = ReplicatedStorage.Remotes.Events.EquipCube
+local ThrowCube = ReplicatedStorage.Remotes.Events.ThrowCube
+
+-- ===== THROW (INTACTO) =====
+local THROW_POWER = 100
+local function throwBallExact()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+
+    local direction = camera.CFrame.LookVector
+    local id = player.UserId .. "_" .. os.clock()
+    local origin = root.Position
+    local velocity = direction * THROW_POWER
+
+    ThrowCube:FireServer(direction, id, origin, velocity)
+end
+-- ======================================
+
+-- Teleport + câmera
+local function teleportAndLookAtCube(cube)
+    local char = player.Character or player.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+
+    local targetPos = cube.Position
+    local dir = (targetPos - root.Position).Unit
+    local teleportPos = targetPos - (dir * TELEPORT_DISTANCE)
+
+    local cf = CFrame.lookAt(teleportPos, targetPos)
+    root.CFrame = cf
+    camera.CFrame = cf
+end
+
+-- ================= LOOP =================
+task.spawn(function()
+    while true do
+        if not _G.H then
+            task.wait(0.3)
+            continue
+        end
+
+        local Brainrots = workspace:FindFirstChild("Brainrots")
+        if Brainrots then
+            local Client = Brainrots:FindFirstChild("Client")
+            local Server = Brainrots:FindFirstChild("Server")
+
+            if Client and Server then
+                for _, clientSpawn in pairs(Client:GetChildren()) do
+                    if not _G.H then break end
+
+                    for _, cube in pairs(clientSpawn:GetChildren()) do
+                        if not _G.H then break end
+
+                        local valid = false
+
+                        if normalCubes[cube.Name] then
+                            valid = true
+                        end
+
+                        if diamondOnlyCubes[cube.Name] then
+                            if cube:FindFirstChild("Star Sparks") then
+                                valid = true
+                            end
+                        end
+
+                        if valid then
+                            local fullId = clientSpawn.Name
+                            local baseId = fullId:match("^(%d+)_")
+
+                            if baseId then
+                                local serverBase = Server:FindFirstChild(baseId)
+                                if serverBase then
+                                    local serverSpawn = serverBase:FindFirstChild(fullId)
+                                    if serverSpawn then
+                                        AttackRemote:FireServer({serverSpawn})
+                                        teleportAndLookAtCube(cube)
+                                        EquipCube:FireServer()
+
+                                        local t = 0
+                                        while t < WAIT_BEFORE_THROW and _G.H do
+                                            task.wait(0.1)
+                                            t += 0.1
+                                        end
+
+                                        if _G.H and Client:FindFirstChild(fullId) then
+                                            throwBallExact()
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(0.2)
+    end
+end)
+-- ========================================
