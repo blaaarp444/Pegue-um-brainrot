@@ -1,6 +1,5 @@
 -- ================= GUI FLUTUANTE =================
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 
 _G.H = false -- começa desligado
@@ -22,15 +21,12 @@ button.Parent = gui
 button.Active = true
 button.Draggable = true -- mobile + pc
 
--- Cantos arredondados
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 20)
 corner.Parent = button
 
--- Toggle
 button.MouseButton1Click:Connect(function()
     _G.H = not _G.H
-
     if _G.H then
         button.Text = "ON"
         button.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
@@ -41,7 +37,7 @@ button.MouseButton1Click:Connect(function()
 end)
 
 -- ================= CONFIG =================
-local TELEPORT_DISTANCE = 11
+local TELEPORT_DISTANCE = 3
 local WAIT_BEFORE_THROW = 5
 -- ==========================================
 
@@ -72,6 +68,9 @@ local AttackRemote = ReplicatedStorage.Remotes.Events.Attack
 local EquipCube = ReplicatedStorage.Remotes.Events.EquipCube
 local ThrowCube = ReplicatedStorage.Remotes.Events.ThrowCube
 
+-- Controle: 1 pokeball por vida
+local alreadyThrown = {}
+
 -- ===== THROW (INTACTO) =====
 local THROW_POWER = 100
 local function throwBallExact()
@@ -101,7 +100,7 @@ local function teleportAndLookAtCube(cube)
     camera.CFrame = cf
 end
 
--- ================= LOOP =================
+-- ================= LOOP PRINCIPAL =================
 task.spawn(function()
     while true do
         if not _G.H then
@@ -110,60 +109,79 @@ task.spawn(function()
         end
 
         local Brainrots = workspace:FindFirstChild("Brainrots")
-        if Brainrots then
-            local Client = Brainrots:FindFirstChild("Client")
-            local Server = Brainrots:FindFirstChild("Server")
+        if not Brainrots then
+            task.wait(0.2)
+            continue
+        end
 
-            if Client and Server then
-                for _, clientSpawn in pairs(Client:GetChildren()) do
-                    if not _G.H then break end
+        local Client = Brainrots:FindFirstChild("Client")
+        local Server = Brainrots:FindFirstChild("Server")
+        if not Client or not Server then
+            task.wait(0.2)
+            continue
+        end
 
-                    for _, cube in pairs(clientSpawn:GetChildren()) do
-                        if not _G.H then break end
+        for _, clientSpawn in pairs(Client:GetChildren()) do
+            if not _G.H then break end
 
-                        local valid = false
+            if alreadyThrown[clientSpawn] then
+                continue
+            end
 
-                        if normalCubes[cube.Name] then
-                            valid = true
-                        end
+            for _, cube in pairs(clientSpawn:GetChildren()) do
+                if not _G.H then break end
 
-                        if diamondOnlyCubes[cube.Name] then
-                            if cube:FindFirstChild("Star Sparks") then
-                                valid = true
-                            end
-                        end
+                local valid = false
 
-                        if valid then
-                            local fullId = clientSpawn.Name
-                            local baseId = fullId:match("^(%d+)_")
+                if normalCubes[cube.Name] then
+                    valid = true
+                end
 
-                            if baseId then
-                                local serverBase = Server:FindFirstChild(baseId)
-                                if serverBase then
-                                    local serverSpawn = serverBase:FindFirstChild(fullId)
-                                    if serverSpawn then
-                                        AttackRemote:FireServer({serverSpawn})
-                                        teleportAndLookAtCube(cube)
-                                        EquipCube:FireServer()
-
-                                        local t = 0
-                                        while t < WAIT_BEFORE_THROW and _G.H do
-                                            task.wait(0.1)
-                                            t += 0.1
-                                        end
-
-                                        if _G.H and Client:FindFirstChild(fullId) then
-                                            throwBallExact()
-                                        end
-                                    end
-                                end
-                            end
-                        end
+                if diamondOnlyCubes[cube.Name] then
+                    if cube:FindFirstChild("Star Sparks") then
+                        valid = true
                     end
+                end
+
+                if valid then
+                    local fullId = clientSpawn.Name
+                    local baseId = fullId:match("^(%d+)_")
+                    if not baseId then break end
+
+                    local serverBase = Server:FindFirstChild(baseId)
+                    if not serverBase then break end
+
+                    local serverSpawn = serverBase:FindFirstChild(fullId)
+                    if not serverSpawn then break end
+
+                    AttackRemote:FireServer({ serverSpawn })
+                    teleportAndLookAtCube(cube)
+                    EquipCube:FireServer()
+
+                    local t = 0
+                    while t < WAIT_BEFORE_THROW and _G.H do
+                        task.wait(0.1)
+                        t += 0.1
+                    end
+
+                    alreadyThrown[clientSpawn] = true
+
+                    clientSpawn.AncestryChanged:Connect(function(_, parent)
+                        if not parent then
+                            alreadyThrown[clientSpawn] = nil
+                        end
+                    end)
+
+                    if Client:FindFirstChild(fullId) then
+                        throwBallExact()
+                    end
+
+                    break
                 end
             end
         end
+
         task.wait(0.2)
     end
 end)
--- ========================================
+-- =================================================
