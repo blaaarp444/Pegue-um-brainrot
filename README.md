@@ -31,6 +31,16 @@ local BuyTab = Window:CreateTab("Auto Buy", 4483362458)
 -------------------------------------------------------------------------------
 -- MAIN
 -------------------------------------------------------------------------------
+_G.AutoFarm = false
+
+MainTab:CreateToggle({
+   Name = "Auto Farm",
+   CurrentValue = false,
+   Callback = function(v)
+       _G.AutoFarm = v
+   end,
+})
+
 MainTab:CreateToggle({
    Name = "Auto Collect Coins",
    CurrentValue = false,
@@ -199,6 +209,152 @@ task.spawn(function()
         end
     end
 end)
+
+-- ================= AUTO FARM (SEM GUI / CONTROLADO PELO RAYFIELD) =================
+
+-- Usa: _G.AutoFarm = true / false
+
+-- ================= CONFIG =================
+local TELEPORT_DISTANCE = 11
+local WAIT_BEFORE_THROW = 5
+-- ==========================================
+
+-- Cubes normais
+local normalCubes = {
+    ["Cube.009"] = true,
+    ["Cube.136"] = true,
+    ["Cube.082"] = true,
+    ["Cube.047"] = true,
+    ["Cube.041"] = true,
+    ["Cube.079"] = true
+}
+
+-- Cubes DIAMOND
+local diamondOnlyCubes = {
+    ["Cube.071"] = true,
+    ["Cube.015"] = true,
+    ["Cube.106"] = true,
+    ["Cube.121"] = true
+}
+
+-- Serviços
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local camera = workspace.CurrentCamera
+
+-- Remotes
+local AttackRemote = ReplicatedStorage.Remotes.Events.Attack
+local EquipCube = ReplicatedStorage.Remotes.Events.EquipCube
+local ThrowCube = ReplicatedStorage.Remotes.Events.ThrowCube
+
+-- Controle: 1 pokeball por vida
+local alreadyThrown = {}
+
+-- ===== THROW (INTACTO) =====
+local THROW_POWER = 100
+local function throwBallExact()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+
+    local direction = camera.CFrame.LookVector
+    local id = player.UserId .. "_" .. os.clock()
+    local origin = root.Position
+    local velocity = direction * THROW_POWER
+
+    ThrowCube:FireServer(direction, id, origin, velocity)
+end
+-- ======================================
+
+-- Teleport + câmera
+local function teleportAndLookAtCube(cube)
+    local char = player.Character or player.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+
+    local targetPos = cube.Position
+    local dir = (targetPos - root.Position).Unit
+    local teleportPos = targetPos - (dir * TELEPORT_DISTANCE)
+
+    local cf = CFrame.lookAt(teleportPos, targetPos)
+    root.CFrame = cf
+    camera.CFrame = cf
+end
+
+-- ================= LOOP PRINCIPAL =================
+task.spawn(function()
+    while true do
+        if not _G.AutoFarm then
+            task.wait(0.3)
+            continue
+        end
+
+        local Brainrots = workspace:FindFirstChild("Brainrots")
+        if not Brainrots then
+            task.wait(0.2)
+            continue
+        end
+
+        local Client = Brainrots:FindFirstChild("Client")
+        local Server = Brainrots:FindFirstChild("Server")
+        if not Client or not Server then
+            task.wait(0.2)
+            continue
+        end
+
+        for _, clientSpawn in pairs(Client:GetChildren()) do
+            if not _G.AutoFarm then break end
+            if alreadyThrown[clientSpawn] then continue end
+
+            for _, cube in pairs(clientSpawn:GetChildren()) do
+                if not _G.AutoFarm then break end
+
+                local valid = false
+                if normalCubes[cube.Name] then valid = true end
+                if diamondOnlyCubes[cube.Name] and cube:FindFirstChild("Star Sparks") then
+                    valid = true
+                end
+
+                if valid then
+                    local fullId = clientSpawn.Name
+                    local baseId = fullId:match("^(%d+)_")
+                    if not baseId then break end
+
+                    local serverBase = Server:FindFirstChild(baseId)
+                    if not serverBase then break end
+
+                    local serverSpawn = serverBase:FindFirstChild(fullId)
+                    if not serverSpawn then break end
+
+                    AttackRemote:FireServer({ serverSpawn })
+                    teleportAndLookAtCube(cube)
+                    EquipCube:FireServer()
+
+                    local t = 0
+                    while t < WAIT_BEFORE_THROW and _G.AutoFarm do
+                        task.wait(0.1)
+                        t += 0.1
+                    end
+
+                    alreadyThrown[clientSpawn] = true
+                    clientSpawn.AncestryChanged:Connect(function(_, parent)
+                        if not parent then
+                            alreadyThrown[clientSpawn] = nil
+                        end
+                    end)
+
+                    if Client:FindFirstChild(fullId) then
+                        throwBallExact()
+                    end
+                    break
+                end
+            end
+        end
+
+        task.wait(0.2)
+    end
+end)
+
+-- ========================================================================
 
 Rayfield:Notify({
     Title = "Sucesso",
