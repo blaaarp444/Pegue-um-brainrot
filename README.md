@@ -1,5 +1,5 @@
 -- cath brainrot by derickexe
-print("Script Atualizado: Multi Buy + Toggle Auto Buy")
+print("Script Atualizado: Versão Limpa e Funcional")
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -9,9 +9,7 @@ local Window = Rayfield:CreateWindow({
    ConfigurationSaving = { Enabled = false }
 })
 
--- Variáveis Globais
-_G.AutoAttack = false
-_G.AttackRange = 60
+-- VARIÁVEIS
 _G.AutoCollect = false
 _G.AutoAttackBoss = false
 _G.AutoClaimSpin = false
@@ -20,12 +18,11 @@ _G.AutoPlaceLucky = false
 _G.AutoOpenLucky = false
 _G.AutoRecall = false
 
--- AUTO BUY
 _G.AutoBuy = false
 _G.SelectedSwords = {}
 _G.SelectedCubes = {}
 
--- Abas
+-- ABAS
 local MainTab = Window:CreateTab("Main", 4483362458)
 local LuckyTab = Window:CreateTab("Auto Lucky Block", 4483362458)
 local SpinTab = Window:CreateTab("Spin Well", 4483362458)
@@ -35,22 +32,7 @@ local BuyTab = Window:CreateTab("Auto Buy", 4483362458)
 -- MAIN
 -------------------------------------------------------------------------------
 MainTab:CreateToggle({
-   Name = "Auto Attack Brainrots",
-   CurrentValue = false,
-   Callback = function(v) _G.AutoAttack = v end,
-})
-
-MainTab:CreateSlider({
-   Name = "Distância do Ataque",
-   Range = {10,150},
-   Increment = 5,
-   Suffix = "Studs",
-   CurrentValue = 60,
-   Callback = function(v) _G.AttackRange = v end,
-})
-
-MainTab:CreateToggle({
-   Name = "Auto Collect Money",
+   Name = "Auto Collect Coins",
    CurrentValue = false,
    Callback = function(v) _G.AutoCollect = v end,
 })
@@ -98,7 +80,7 @@ SpinTab:CreateToggle({
 })
 
 -------------------------------------------------------------------------------
--- AUTO BUY (MULTI SELECT)
+-- AUTO BUY
 -------------------------------------------------------------------------------
 BuyTab:CreateToggle({
    Name = "Auto Buy (ON/OFF)",
@@ -107,7 +89,7 @@ BuyTab:CreateToggle({
 })
 
 local swordList = {"Nenhuma"}
-for i = 1,13 do table.insert(swordList,"Sword_"..i) end
+for i = 1, 13 do table.insert(swordList, "Sword_"..i) end
 
 BuyTab:CreateDropdown({
    Name = "Select Swords",
@@ -120,7 +102,7 @@ BuyTab:CreateDropdown({
 })
 
 local cubeList = {"Nenhuma"}
-for i = 1,6 do table.insert(cubeList,"Cube_"..i) end
+for i = 1, 6 do table.insert(cubeList, "Cube_"..i) end
 
 BuyTab:CreateDropdown({
    Name = "Select Pokeballs",
@@ -133,28 +115,51 @@ BuyTab:CreateDropdown({
 })
 
 -------------------------------------------------------------------------------
--- LOOPS
+-- LUCKY BLOCK LOOPS
 -------------------------------------------------------------------------------
-game:GetService("RunService").Heartbeat:Connect(function()
-    if _G.AutoAttack then
-        local char = game.Players.LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            for _,s in ipairs(workspace.Brainrots.Server:GetChildren()) do
-                for _,t in ipairs(s:GetChildren()) do
-                    if (t:GetPivot().Position - hrp.Position).Magnitude <= _G.AttackRange then
-                        game:GetService("ReplicatedStorage").Remotes.Events.Attack:FireServer({[1]=t})
-                    end
-                end
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.AutoPlaceLucky then
+            for i = 1, 165 do
+                if not _G.AutoPlaceLucky then break end
+                game:GetService("ReplicatedStorage").Remotes.Events.Place:FireServer("Slot"..i)
+                task.wait(0.5)
             end
         end
     end
+end)
 
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.AutoOpenLucky then
+            for i = 1, 165 do
+                if not _G.AutoOpenLucky then break end
+                game:GetService("ReplicatedStorage").Remotes.Events.OpenLuckyBlock:FireServer("Slot"..i)
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.AutoRecall then
+            for i = 1, 165 do
+                if not _G.AutoRecall then break end
+                game:GetService("ReplicatedStorage").Remotes.Events.Recall:FireServer("Slot"..i)
+            end
+        end
+    end
+end)
+
+-------------------------------------------------------------------------------
+-- LOOPS PRINCIPAIS
+-------------------------------------------------------------------------------
+game:GetService("RunService").Heartbeat:Connect(function()
     if _G.AutoAttackBoss then
         local bossF = workspace:FindFirstChild("BossEvent") and workspace.BossEvent:FindFirstChild("Server")
         if bossF then
-            for _,boss in ipairs(bossF:GetChildren()) do
-                game:GetService("ReplicatedStorage").Remotes.Events.AttackBoss:FireServer({[1]=boss})
+            for _, boss in ipairs(bossF:GetChildren()) do
+                game:GetService("ReplicatedStorage").Remotes.Events.AttackBoss:FireServer({[1] = boss})
             end
         end
     end
@@ -168,17 +173,25 @@ game:GetService("RunService").Heartbeat:Connect(function()
     end
 end)
 
--- AUTO BUY LOOP
+task.spawn(function()
+    while task.wait(10) do
+        if _G.AutoCollect then
+            for _, item in ipairs(game.Players.LocalPlayer.PlayerData.Inventory:GetChildren()) do
+                game:GetService("ReplicatedStorage").Remotes.Events.CollectCash:FireServer(item.Name)
+            end
+        end
+    end
+end)
+
 task.spawn(function()
     while task.wait(0.3) do
         if _G.AutoBuy then
-            for _,sword in ipairs(_G.SelectedSwords) do
+            for _, sword in ipairs(_G.SelectedSwords) do
                 if sword ~= "Nenhuma" then
                     game:GetService("ReplicatedStorage").Remotes.Events.PurchaseSword:FireServer(sword)
                 end
             end
-
-            for _,cube in ipairs(_G.SelectedCubes) do
+            for _, cube in ipairs(_G.SelectedCubes) do
                 if cube ~= "Nenhuma" then
                     game:GetService("ReplicatedStorage").Remotes.Events.PurchaseCube:FireServer(cube)
                 end
@@ -187,19 +200,8 @@ task.spawn(function()
     end
 end)
 
--- AUTO COLLECT
-task.spawn(function()
-    while task.wait(10) do
-        if _G.AutoCollect then
-            for _,item in ipairs(game.Players.LocalPlayer.PlayerData.Inventory:GetChildren()) do
-                game:GetService("ReplicatedStorage").Remotes.Events.CollectCash:FireServer(item.Name)
-            end
-        end
-    end
-end)
-
 Rayfield:Notify({
     Title = "Sucesso",
-    Content = "Auto Buy com Multi Select ativado!",
+    Content = "Script carregado com sucesso!",
     Duration = 3
 })
